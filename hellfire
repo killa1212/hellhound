@@ -1,4 +1,4 @@
-    getgenv().Howl = {
+getgenv().Howl = {
         ["Main"] = {
             ["Intro"] = true,
             ["UI"] = true,
@@ -6,7 +6,7 @@
             ["Visible Text"] = true
         },
         ["Triggerbot"] = {
-            ["Enabled"] = false
+            ["Enabled"] = false,
             ["Key"] = "T",
             ["Toggle"] = true,
             ["Hold"] = false,
@@ -17,7 +17,7 @@
             ["VisibilityCheck"] = true
         },
         ["UITitle"] = {
-            ["Text"] = "RonRin",
+            ["Text"] = "xdx",
             ["Extension"] = {
                 ["Fringe"] = "[",
                 ["End"] = "]"
@@ -47,7 +47,7 @@
                 ["Esp"] = {
                     ["Enabled"] = true,
                     ["Keybind"] = "T",
-                    ["Radius"] = 700,
+                    ["Radius"] = 100,
                     ["Style"] = "Circle",
                     ["BoxSize"] = {
                         ["X"] = 500,
@@ -125,7 +125,7 @@
                 },
                 ["Prediction"] = {
                     ["Enabled"] = true,
-                    ["Amount"] = 0.13
+                    ["Amount"] = 0.10
                 }, 
                 ["AntiCurve"] = {
                     ["Enabled"] = true,
@@ -217,7 +217,7 @@
             if Howl["Main"]["Intro"] == true then
                 -- Create the intro GUI
                 local Intro = Instance.new("ScreenGui")
-                Intro.Name = "RonRin By Shawn"
+                Intro.Name = "RonRin"
                 Intro.Parent = game.CoreGui
                 
                 -- Create background frame
