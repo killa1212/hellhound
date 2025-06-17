@@ -1,0 +1,667 @@
+getgenv().Ronrin = {
+    ["Options"] = {
+        Type = "Target", -- FOV / Target
+        UpdateNotification = true,
+
+        ["Keybind"] = {
+            Aimbot = "Q",
+            Resolver = "H",
+            TriggerBot = "T",
+            RapidFire = "L",
+        },
+    },
+    ["Combat"] = {
+        ["Aimbot"] = {
+            Prediction = 0.126,
+            Smoothness = 0.65,
+            Part = "Head",
+
+            ["MultipleParts"] = {
+                Enabled = false,
+                Parts = { "Head", "UpperTorso" },
+            },
+
+            ["Air"] = {
+                Smoothness = 0.161,
+                Prediction = 0.121191,
+                Part = "Head",
+            },
+
+            ["Shake"] = {
+                Enabled = false,
+                Amount = 15,
+            },
+        },
+        ["Silent"] = {
+            Prediction = 0.12361,
+            Part = "HumanoidRootPart",
+
+            ["MultipleParts"] = {
+                Enabled = false,
+                Parts = { "Head", "UpperTorso", "HumanoidRootPart" },
+            },
+
+            ["Offsets"] = {
+                Jump = { Amount = 0 },
+                Fall = { Amount = -0.045 },
+            },
+        },
+        ["RapidFire"] = {
+            Enabled = false,
+            Delay = 0.01,
+        },
+    },
+    ["FieldOfView"] = {
+        Enabled = false,
+        Size = 250,
+        Color = Color3.fromRGB(255, 255, 255),
+        Transparency = 1,
+        Filled = false,
+
+        ["Dotted FieldOfView"] = {
+            Enabled = false,
+            Visible = true,
+            Rainbow = true,
+
+            AmountOfDots = 80,
+            DotsSize = 1.5,
+            Thickness = 0.5,
+        },
+    },
+    ["Misc"] = {
+        ["PredictionAdjuster"] = {
+            Enabled = false,
+            VelocityThreshold = 250,
+        },
+        ["Checks"] = {
+            KnockedChecks = true,
+            TargetDeath = true,
+            PlayerDeath = true,
+            WallCheck = true,
+
+            ["Resolver"] = {
+                Enabled = false,
+                Notification = true,
+            },
+        },
+        ["TriggerBot"] = {
+            Enabled = false,
+            KnifeCheck = true, -- Changed to true to enable knife checking
+            WallCheck = true,
+            HealthCheck = true, -- Added health check
+            HitPart = "HumanoidRootPart", -- Target part for TriggerBot
+        },
+    },
+}
+
+if getgenv().Loaded == true then
+    if Ronrin.Options.UpdateNotification == true then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Ronrin loaded  https://discord.gg/aFTd7Has",
+            Text = "Updated Script Settings.",
+            Duration = 0.001,
+        })
+    end
+    return
+end
+
+-- // Services
+local players = game:GetService("Players")
+local starterGui = game:GetService("StarterGui")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local inputService = game:GetService("UserInputService")
+local virtualInputManager = game:GetService("VirtualInputManager")
+local runService = game:GetService("RunService")
+
+local mousePositionArgument = { Argument = "UpdateMousePos", Remote = "MainEvent" }
+
+-- // Important Variables
+local localPlayer = players.LocalPlayer
+local camera = workspace.CurrentCamera
+local mainEvent = replicatedStorage:FindFirstChild(mousePositionArgument.Remote)
+local mouse = localPlayer:GetMouse()
+
+-- // Optimization Variables
+local isA = game.IsA
+local findFirstChild = game.FindFirstChild
+
+local findPartOnRayWithIgnoreList = workspace.FindPartOnRayWithIgnoreList
+local getChildren = workspace.GetChildren
+local getPlayers = players.GetPlayers
+
+local getMouseLocation = inputService.GetMouseLocation
+local worldToViewportPoint = camera.WorldToViewportPoint
+
+local fireServer = mainEvent and mainEvent.FireServer or function() end
+
+local twait = task.wait
+local tspawn = task.spawn
+
+local tinsert = table.insert
+local tfind = table.find
+
+local newVector3 = Vector3.new
+local newVector2 = Vector2.new
+local newCFrame = CFrame.new
+local fromAxisAngle = CFrame.fromAxisAngle
+
+local newRay = Ray.new
+local fromHSV = Color3.fromHSV
+
+local min = math.min
+local random = math.random
+local abs = math.abs
+local rad = math.rad
+local sin = math.sin
+local cos = math.cos
+local inf = math.huge
+local pi = math.pi
+
+local upper = string.upper
+local sub = string.sub
+
+local freeFall = Enum.HumanoidStateType.Freefall
+local jumping = Enum.HumanoidStateType.Jumping
+local enumKeyCode = Enum.KeyCode
+
+-- // Main Script Variables
+local isLocking, targetPlayer = false, nil
+local miniDots, aimbotCircle = {}, Drawing.new("Circle")
+local isFiring = false
+local isTriggerBotEnabled = false
+
+-- // Performance optimization variables
+local lastUpdateTime = 0
+local UPDATE_INTERVAL = 1/60 -- 60 FPS cap for updates
+local mousePosition = newVector2(0, 0)
+local cachedPlayers = {}
+local playerCacheTime = 0
+local PLAYER_CACHE_INTERVAL = 0.1 -- Update player cache every 0.1 seconds
+
+-- // Utility Functions
+local utility = {}
+utility.get_gun = function()
+    local character = localPlayer.Character
+    if character then
+        for _, tool in next, character:GetChildren() do
+            if tool:IsA("Tool") and tool:FindFirstChild("Ammo") then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+utility.get_knife = function()
+    local character = localPlayer.Character
+    if character then
+        for _, tool in next, character:GetChildren() do
+            if tool:IsA("Tool") and string.find(string.lower(tool.Name), "knife") then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+utility.get_tool = function()
+    local character = localPlayer.Character
+    if character then
+        for _, tool in next, character:GetChildren() do
+            if tool:IsA("Tool") then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+utility.rapid = function(tool)
+    if tool and tool.Parent then
+        tool:Activate()
+    end
+end
+
+-- // Script Functions
+local updateFieldOfViewDrawings = function()
+    local fieldOfView = Ronrin.FieldOfView
+    aimbotCircle.Visible = fieldOfView.Enabled and not fieldOfView["Dotted FieldOfView"].Enabled
+    aimbotCircle.Color = fieldOfView.Color
+    aimbotCircle.Radius = fieldOfView.Size
+    aimbotCircle.Transparency = fieldOfView.Transparency
+    aimbotCircle.Filled = fieldOfView.Filled
+    aimbotCircle.Position = mousePosition
+end
+
+local createMiniDots = function()
+    local fieldOfView = Ronrin.FieldOfView
+    local dottedFieldOfView = fieldOfView["Dotted FieldOfView"]
+    local angleIncrement = 360 / dottedFieldOfView.AmountOfDots
+
+    for i = 1, dottedFieldOfView.AmountOfDots do
+        local miniDot = Drawing.new("Circle")
+
+        miniDot.Visible = dottedFieldOfView.Enabled
+        miniDot.Filled = false
+        miniDot.Transparency = fieldOfView.Transparency
+        miniDot.Radius = dottedFieldOfView.DotsSize
+        miniDot.Thickness = dottedFieldOfView.Thickness
+        miniDot.Color = fieldOfView.Color
+
+        tinsert(miniDots, { dot = miniDot, angleRad = rad(i * angleIncrement) })
+    end
+end
+
+local isPlayerAlive = function(player : Player)
+    return player.Character and findFirstChild(player.Character, "Humanoid") and player.Character.Humanoid.Health > 0
+end
+
+local wallCheck = function(character: Model)
+    if not Ronrin.Misc.Checks.WallCheck then
+        return true
+    end
+
+    local targetPosition = character.HumanoidRootPart.Position
+    local cameraPosition = camera.CFrame.Position
+    local distance = (targetPosition - cameraPosition).Magnitude
+
+    local hitPart, hitPosition = findPartOnRayWithIgnoreList(
+        workspace,
+        newRay(cameraPosition, (targetPosition - cameraPosition).Unit * distance),
+        { localPlayer.Character, character }
+    )
+
+    return hitPart == nil or (hitPosition - cameraPosition).Magnitude >= distance
+end
+
+local velocityCheck = function(character: Model)
+    if not Ronrin.Misc.Checks.Resolver.Enabled then
+        return false
+    end
+
+    local humanoidRootPart = character.HumanoidRootPart
+    local humanoid = character.Humanoid
+    local velocity = humanoidRootPart.Velocity
+    local yVelocity = abs(velocity.Y)
+
+    if (yVelocity > 5 and humanoid:GetState() ~= freeFall) or yVelocity > 35 or abs(velocity.X) > 35 or abs(velocity.Z) > 35 then
+        return true
+    end
+
+    return false
+end
+
+local adjustPrediction = function(config: table, part: Instance)
+    if not config.PredictionAdjuster or not config.PredictionAdjuster.Enabled or not part then
+        return config.Prediction or 0
+    end
+
+    local prediction = config.Prediction or 0
+    local velocity = part.Velocity or Vector3.zero
+    local max = Ronrin.Misc.PredictionAdjuster.VelocityThreshold or 250
+
+    return prediction + ((prediction * 1.5) - prediction) * math.min(velocity.Magnitude / max, 1)
+end
+
+-- Cached player list function
+local updatePlayerCache = function()
+    local currentTime = tick()
+    if currentTime - playerCacheTime >= PLAYER_CACHE_INTERVAL then
+        cachedPlayers = {}
+        for _, player in next, players:GetPlayers() do
+            if player ~= localPlayer and isPlayerAlive(player) then
+                tinsert(cachedPlayers, player)
+            end
+        end
+        playerCacheTime = currentTime
+    end
+end
+
+local getClosestPlayerToCursor = function(radius: number)
+    updatePlayerCache()
+    
+    local shortestDistance = radius
+    local closestPlayer = nil
+    local part = Ronrin.Combat.Aimbot.Part
+
+    for _, player in next, cachedPlayers do
+        local character = player.Character
+        if character and character:FindFirstChild(part) and wallCheck(character) then
+            local onScreenPosition, isOnScreen = worldToViewportPoint(camera, character[part].Position)
+            if isOnScreen then
+                local distance = (newVector2(onScreenPosition.X, onScreenPosition.Y) - mousePosition).Magnitude
+                if distance < shortestDistance then
+                    closestPlayer = player
+                    shortestDistance = distance
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local getClosestPartFromPlayerToCursor = function(multipleParts: table, character: Model)
+    local shortestDistance = inf
+    local closestPart = nil
+    local parts = multipleParts.Parts
+    local indexAmount = 0
+
+    for _, part in next, getChildren(character) do
+        if isA(part, "BasePart") and tfind(parts, part.Name) then
+            local onScreenPosition = worldToViewportPoint(camera, part.Position)
+            local distance = (newVector2(onScreenPosition.X, onScreenPosition.Y) - mousePosition).Magnitude
+
+            if distance < shortestDistance then
+                closestPart = part
+                shortestDistance = distance
+            end
+            indexAmount = indexAmount + 1
+        end
+
+        if indexAmount >= #parts then
+            break
+        end
+    end
+    return closestPart
+end
+
+local resolvePartVelocity = function(part: Instance)
+    if not part then return Vector3.zero end
+    local lastPosition = part.Position
+    twait(0.145)
+    local currentPosition = part.Position or lastPosition
+    return (currentPosition - lastPosition) / 0.145
+end
+
+local getRandomVector3 = function(aimbot: table)
+    local positiveShakeAmount = aimbot.Shake.Amount
+    local negativeShakeAmount = -positiveShakeAmount
+    local factor = 0.01
+
+    return newVector3(
+        random(negativeShakeAmount, positiveShakeAmount) * factor,
+        random(negativeShakeAmount, positiveShakeAmount) * factor,
+        random(negativeShakeAmount, positiveShakeAmount) * factor
+    )
+end
+
+-- // Initializing MiniDots for Dotted FieldOfView
+createMiniDots()
+
+-- // Optimized Aimbot Main (Throttled updates)
+runService.Heartbeat:Connect(function(deltaTime: number)
+    local currentTime = tick()
+    
+    -- Update mouse position every frame for smooth visuals
+    mousePosition = getMouseLocation(inputService)
+    
+    -- Throttle expensive operations
+    if currentTime - lastUpdateTime < UPDATE_INTERVAL then
+        -- Only update visual elements every frame
+        updateFieldOfViewDrawings()
+        
+        local dottedFieldOfView = Ronrin.FieldOfView["Dotted FieldOfView"]
+        if dottedFieldOfView.Enabled then
+            local baseRadius = Ronrin.FieldOfView.Size
+            local spinAngle = currentTime * 50 -- Smooth rotation
+            
+            for _, data in ipairs(miniDots) do
+                local miniDot = data.dot
+                local angle = data.angleRad + rad(spinAngle)
+                local offsetX = cos(angle) * baseRadius
+                local offsetY = sin(angle) * baseRadius
+                miniDot.Position = mousePosition + newVector2(offsetX, offsetY)
+            end
+        end
+        return
+    end
+    
+    lastUpdateTime = currentTime
+    updateFieldOfViewDrawings()
+
+    local aimbot = Ronrin.Combat.Aimbot
+    local dottedFieldOfView = Ronrin.FieldOfView["Dotted FieldOfView"]
+
+    if dottedFieldOfView.Enabled then
+        local baseRadius = Ronrin.FieldOfView.Size
+        local spinAngle = currentTime * 50
+
+        for _, data in ipairs(miniDots) do
+            local miniDot = data.dot
+            local angle = data.angleRad + rad(spinAngle)
+            local offsetX = cos(angle) * baseRadius
+            local offsetY = sin(angle) * baseRadius
+            miniDot.Position = mousePosition + newVector2(offsetX, offsetY)
+        end
+    end
+
+    if targetPlayer and isLocking and targetPlayer.Character and targetPlayer.Character.Parent then
+        local character = targetPlayer.Character
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            targetPlayer = nil
+            isLocking = false
+            return
+        end
+
+        local isFalling = humanoid:GetState() == freeFall
+        local targetData = isFalling and aimbot.Air or aimbot
+        local targetPartName = targetData.Part
+
+        local targetPart
+        if isFalling then
+            targetPart = character:FindFirstChild(targetPartName)
+        else
+            targetPart = aimbot.MultipleParts.Enabled
+                and getClosestPartFromPlayerToCursor(aimbot.MultipleParts, character)
+                or character:FindFirstChild(targetPartName)
+        end
+
+        if not targetPart then
+            targetPlayer = nil
+            isLocking = false
+            return
+        end
+
+        local alpha = targetData.Smoothness
+        local prediction = adjustPrediction(targetData, targetPart)
+        local goalPosition
+
+        if not velocityCheck(character) then
+            goalPosition = targetPart.Position + targetPart.Velocity * prediction
+        else
+            goalPosition = targetPart.Position + (resolvePartVelocity(targetPart) * prediction)
+        end
+
+        if aimbot.Shake.Enabled then
+            goalPosition = goalPosition + getRandomVector3(aimbot)
+        end
+
+        local goal = newCFrame(camera.CFrame.Position, goalPosition)
+        camera.CFrame = camera.CFrame:Lerp(goal, alpha)
+
+        local checks = Ronrin.Misc.Checks
+
+        if checks.KnockedChecks then
+            local bodyEffects = character:FindFirstChild("BodyEffects")
+            local isKO = bodyEffects and bodyEffects:FindFirstChild("K.O") and bodyEffects["K.O"].Value
+            local isGrabbed = character:FindFirstChild("GRABBING_CONSTRAINT") ~= nil
+            if humanoid.Health <= 0 or isKO or isGrabbed then
+                targetPlayer = nil
+                isLocking = false
+            end
+        end
+
+        if checks.TargetDeath and humanoid.Health <= 0 then
+            targetPlayer = nil
+            isLocking = false
+        end
+
+        if checks.PlayerDeath and localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") and localPlayer.Character.Humanoid.Health <= 0 then
+            targetPlayer = nil
+            isLocking = false
+        end
+    end
+end)
+
+-- // Optimized TriggerBot (Throttled) - FIXED VERSION
+local triggerBotLastUpdate = 0
+local TRIGGERBOT_INTERVAL = 1/30 -- 30 FPS for trigger bot
+
+runService.RenderStepped:Connect(function()
+    local currentTime = tick()
+    
+    if isTriggerBotEnabled and Ronrin.Misc.TriggerBot.Enabled and (currentTime - triggerBotLastUpdate) >= TRIGGERBOT_INTERVAL then
+        triggerBotLastUpdate = currentTime
+        
+        -- Get current tool to check what we're holding
+        local currentTool = utility.get_tool()
+        if not currentTool then
+            return -- No tool equipped
+        end
+        
+        -- Enhanced Knife Check - Check if current tool is a knife
+        if Ronrin.Misc.TriggerBot.KnifeCheck then
+            local toolName = string.lower(currentTool.Name)
+            if string.find(toolName, "knife") or string.find(toolName, "blade") or string.find(toolName, "sword") then
+                return -- Don't trigger if holding a knife/melee weapon
+            end
+        end
+        
+        -- Additional check: Only proceed if we have a gun (tool with Ammo)
+        local gun = utility.get_gun()
+        if not gun then
+            return -- No gun equipped
+        end
+
+        local target = mouse.Target
+        if target and target:FindFirstAncestorOfClass("Model") then
+            local model = target:FindFirstAncestorOfClass("Model")
+            if model ~= localPlayer.Character then
+                local humanoid = model:FindFirstChildOfClass("Humanoid")
+                local hitPart = model:FindFirstChild(Ronrin.Misc.TriggerBot.HitPart)
+
+                -- Health Check
+                if Ronrin.Misc.TriggerBot.HealthCheck and (not humanoid or humanoid.Health <= 0) then
+                    return
+                end
+
+                -- Wall Check
+                if Ronrin.Misc.TriggerBot.WallCheck and not wallCheck(model) then
+                    return
+                end
+
+                -- Ensure hit part exists and we have a valid gun
+                if hitPart and gun then
+                    utility.rapid(gun) -- Use the gun specifically
+                    twait(0.01)
+                end
+            end
+        end
+    end
+end)
+
+-- // Silent Main
+local MetaTable = getrawmetatable(game)
+local OldIndex = MetaTable.__index
+setreadonly(MetaTable, false)
+
+MetaTable.__index = function(self, key)
+    if not checkcaller() and self == localPlayer:GetMouse() and Ronrin.Combat.Silent then
+        if key == "Hit" or key == "Target" then
+            local targetPlayer = getClosestPlayerToCursor(inf)
+            if targetPlayer and targetPlayer.Character then
+                local targetPart = targetPlayer.Character:FindFirstChild(Ronrin.Combat.Silent.Part)
+                if targetPart then
+                    local velocity = targetPart.Velocity or Vector3.zero
+                    local predictedPosition = targetPart.Position + (velocity * Ronrin.Combat.Silent.Prediction)
+                    return key == "Hit" and CFrame.new(predictedPosition) or targetPart
+                end
+            end
+        end
+    end
+    return OldIndex(self, key)
+end
+setreadonly(MetaTable, true)
+
+local currentTool = nil
+if localPlayer.Character then
+    for _, v in next, getChildren(localPlayer.Character) do
+        if isA(v, "Tool") then
+            currentTool = v
+            currentTool.Parent = localPlayer:FindFirstChildOfClass("Backpack")
+            break
+        end
+    end
+end
+
+-- // RapidFire Main
+local function startRapidFire()
+    local gun = utility.get_gun()
+    if Ronrin.Combat.RapidFire.Enabled and gun and not isFiring then
+        isFiring = true
+        tspawn(function()
+            while isFiring and Ronrin.Combat.RapidFire.Enabled and utility.get_gun() do
+                utility.rapid(gun)
+                twait(Ronrin.Combat.RapidFire.Delay)
+            end
+            isFiring = false
+        end)
+    end
+end
+
+-- // Handle mouse input for RapidFire
+inputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and Ronrin.Combat.RapidFire.Enabled then
+        startRapidFire()
+    end
+end)
+
+inputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isFiring = false
+    end
+end)
+
+-- // Keybinds
+inputService.InputBegan:Connect(function(input: InputObject, gameProcessedEvent: boolean)
+    if gameProcessedEvent then
+        return
+    end
+
+    local inputKeyCode = input.KeyCode
+    local keyBind = Ronrin.Options.Keybind
+
+    if inputKeyCode == enumKeyCode[sub(upper(keyBind.Aimbot), 1, 1)] then
+        isLocking = not isLocking
+        targetPlayer = isLocking and getClosestPlayerToCursor(inf) or nil
+    elseif inputKeyCode == enumKeyCode[sub(upper(keyBind.Resolver), 1, 1)] then
+        local Resolver = Ronrin.Misc.Checks.Resolver
+        Resolver.Enabled = not Resolver.Enabled
+        if Resolver.Notification then
+            starterGui:SetCore("SendNotification", {
+                Title = "Resolver has been toggled",
+                Text = tostring(Resolver.Enabled),
+                Duration = 3,
+            })
+        end
+    elseif inputKeyCode == enumKeyCode[sub(upper(keyBind.TriggerBot), 1, 1)] then
+        isTriggerBotEnabled = not isTriggerBotEnabled
+        Ronrin.Misc.TriggerBot.Enabled = isTriggerBotEnabled
+        starterGui:SetCore("SendNotification", {
+            Title = "TriggerBot",
+            Text = isTriggerBotEnabled and "TriggerBot Enabled" or "TriggerBot Disabled",
+            Duration = 0.9,
+        })
+    elseif inputKeyCode == enumKeyCode[sub(upper(keyBind.RapidFire), 1, 1)] then
+        Ronrin.Combat.RapidFire.Enabled = not Ronrin.Combat.RapidFire.Enabled
+        isFiring = false
+        starterGui:SetCore("SendNotification", {
+            Title = "Rapid Fire",
+            Text = Ronrin.Combat.RapidFire.Enabled and "Rapid Fire Enabled" or "Rapid Fire Disabled",
+            Duration = 0.9,
+        })
+    end
+end)
+
+getgenv().Loaded = true
