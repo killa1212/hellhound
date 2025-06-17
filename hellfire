@@ -26,9 +26,9 @@ local Config = {
             Normal = 20       -- Normal walkspeed value
         },
         FlySpeed = {
-            Fast = 500,       -- Max fly speed
-            Normal = 100,     -- Speed when fly is toggled off
-            Increment = 0.4   -- Speed increase rate while flying
+            Fast = 560,       -- Max fly speed
+            Normal = 200,     -- Speed when fly is toggled off
+            Increment = 10   -- Speed increase rate while flying
         },
         JumpPower = {
             High = 115,       -- High jump power
