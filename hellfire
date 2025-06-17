@@ -12,8 +12,8 @@ getgenv().Ronrin = {
     },
     ["Combat"] = {
         ["Aimbot"] = {
-            Prediction = 0.126,
-            Smoothness = 0.65,
+            Prediction = 0.13,
+            Smoothness = 0.60,
             Part = "Head",
 
             ["MultipleParts"] = {
