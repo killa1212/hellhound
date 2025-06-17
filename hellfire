@@ -365,8 +365,8 @@ createRainbowCrosshair()
 
 -- Notification
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Hush.cc",
-    Text = "Hush.cc HAS BEEN LOADED SUCCESSFULLY MADE BY SHAWN",
+    Title = "RonRin",
+    Text = "RonRin.cc HAS BEEN LOADED SUCCESSFULLY MADE BY SHAWN",
     Icon = "rbxassetid://133649641835275"
 })
 getgenv().Shake = false
@@ -455,7 +455,7 @@ Index.BorderSizePixel = 0
 Index.Position = UDim2.new(0, 5, 0, 0)
 Index.Size = UDim2.new(1, -10, 1, 0)
 Index.Font = Enum.Font.SourceSansBold
-Index.Text = "Hush Stats"
+Index.Text = "RonRin Anti"
 Index.TextColor3 = Color3.fromRGB(255, 255, 255)
 Index.TextSize = 17
 Index.TextStrokeTransparency = 0.000
@@ -672,13 +672,13 @@ if keyPressed == string.lower(getgenv().Keybind) then
         getgenv().Shake = true
     warn('Roblox is Enabled')
     game.StarterGui:SetCore("SendNotification", {
-    Title = "Hush AntiLock",
+    Title = "RonRin AntiLock",
     Text = "On" })
     elseif getgenv().Shake == true then
         getgenv().Shake = false
     warn('Roblox is Disabled')
     game.StarterGui:SetCore("SendNotification", {
-    Title = "Hush AntiLock",
+    Title = "RonRin AntiLock",
     Text = "Off" })
             end
         end)
